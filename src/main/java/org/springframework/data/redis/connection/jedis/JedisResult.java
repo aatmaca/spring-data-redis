@@ -30,21 +30,23 @@ import org.springframework.lang.Nullable;
  * @author Jennifer Hickey
  * @author Christoph Strobl
  * @author Mark Paluch
+ * @param <T> The data type of the object that holds the future result (usually of type Future).
+ * @param <R> The data type of the result type.
  * @since 2.1
  */
-class JedisResult<T, S> extends FutureResult<Response<?>> {
+class JedisResult<T, R> extends FutureResult<Response<?>> {
 
 	private final boolean convertPipelineAndTxResults;
 
-	<T> JedisResult(Response<T> resultHolder) {
+	JedisResult(Response<T> resultHolder) {
 		this(resultHolder, false, null);
 	}
 
-	<T> JedisResult(Response<T> resultHolder, boolean convertPipelineAndTxResults, @Nullable Converter<T, ?> converter) {
-		this(resultHolder, null, convertPipelineAndTxResults, converter);
+	JedisResult(Response<T> resultHolder, boolean convertPipelineAndTxResults, @Nullable Converter<T, ?> converter) {
+		this(resultHolder, () -> null, convertPipelineAndTxResults, converter);
 	}
 
-	<T> JedisResult(Response<T> resultHolder, Supplier<S> defaultReturnValue, boolean convertPipelineAndTxResults,
+	JedisResult(Response<T> resultHolder, Supplier<R> defaultReturnValue, boolean convertPipelineAndTxResults,
 			@Nullable Converter<T, ?> converter) {
 
 		super(resultHolder, converter, defaultReturnValue);
@@ -58,6 +60,7 @@ class JedisResult<T, S> extends FutureResult<Response<?>> {
 	 */
 	@Nullable
 	@Override
+	@SuppressWarnings("unchecked")
 	public T get() {
 		return (T) getResultHolder().get();
 	}
@@ -65,20 +68,20 @@ class JedisResult<T, S> extends FutureResult<Response<?>> {
 	/*
 	 * (non-Javadoc)
 	 * @see org.springframework.data.redis.connection.FutureResult#seeksConversion()
-	 * @return
 	 */
 	public boolean seeksConversion() {
-		return convertPipelineAndTxResults && converter != null;
+		return convertPipelineAndTxResults;
 	}
 
 	/**
 	 * Jedis specific {@link FutureResult} implementation of a throw away status result.
 	 */
-	static class JedisStatusResult extends JedisResult {
+	static class JedisStatusResult extends JedisResult<Object, Object> {
 
+		@SuppressWarnings("unchecked")
 		<T> JedisStatusResult(Response<T> resultHolder, Converter<T, ?> converter) {
 
-			super(resultHolder, false, converter);
+			super((Response) resultHolder, false, (Converter) converter);
 			setStatus(true);
 		}
 	}
@@ -87,10 +90,10 @@ class JedisResult<T, S> extends FutureResult<Response<?>> {
 	 * Builder for constructing {@link JedisResult}.
 	 *
 	 * @param <T>
-	 * @param <S>
+	 * @param <R>
 	 * @since 2.1
 	 */
-	static class JedisResultBuilder<T, S> {
+	static class JedisResultBuilder<T, R> {
 
 		private final Response<T> response;
 		private Converter<T, ?> converter;
@@ -107,29 +110,30 @@ class JedisResult<T, S> extends FutureResult<Response<?>> {
 			return new JedisResultBuilder<>(response);
 		}
 
-		<S> JedisResultBuilder<T, S> mappedWith(Converter<T, S> converter) {
+		<R> JedisResultBuilder<T, R> mappedWith(Converter<T, R> converter) {
 
 			this.converter = converter;
-			return (JedisResultBuilder<T, S>) this;
+			return (JedisResultBuilder<T, R>) this;
 		}
 
-		<S> JedisResultBuilder<T, S> defaultNullTo(S value) {
+		<R> JedisResultBuilder<T, R> defaultNullTo(R value) {
 			return (defaultNullTo(() -> value));
 		}
 
-		<S> JedisResultBuilder<T, S> defaultNullTo(Supplier<S> value) {
+		<R> JedisResultBuilder<T, R> defaultNullTo(Supplier<R> value) {
 
 			this.nullValueDefault = value;
-			return (JedisResultBuilder<T, S>) this;
+			return (JedisResultBuilder<T, R>) this;
 		}
 
-		JedisResultBuilder<T, S> convertPipelineAndTxResults(boolean flag) {
+		JedisResultBuilder<T, R> convertPipelineAndTxResults(boolean flag) {
 
 			convertPipelineAndTxResults = flag;
 			return this;
 		}
 
-		JedisResult<T, S> build() {
+		@SuppressWarnings("unchecked")
+		JedisResult<T, R> build() {
 			return new JedisResult(response, nullValueDefault, convertPipelineAndTxResults, converter);
 		}
 

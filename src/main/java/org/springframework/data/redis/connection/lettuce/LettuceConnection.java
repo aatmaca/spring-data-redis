@@ -119,15 +119,18 @@ public class LettuceConnection extends AbstractRedisConnection {
 		return newLettuceResult(resultHolder, (val) -> val);
 	}
 
-	<T> LettuceResult newLettuceResult(Future<T> resultHolder, Converter<T, ?> converter) {
+	@SuppressWarnings("unchecked")
+	<T, R> LettuceResult<T, R> newLettuceResult(Future<T> resultHolder, Converter<T, ?> converter) {
 
-		return LettuceResultBuilder.forResponse(resultHolder).mappedWith(converter)
+		return LettuceResultBuilder.forResponse(resultHolder).mappedWith((Converter) converter)
 				.convertPipelineAndTxResults(convertPipelineAndTxResults).build();
 	}
 
-	<T> LettuceResult newLettuceResult(Future<T> resultHolder, Converter<T, ?> converter, Supplier<?> defaultValue) {
+	@SuppressWarnings("unchecked")
+	<T, R> LettuceResult<T, R> newLettuceResult(Future<T> resultHolder, Converter<T, R> converter,
+			Supplier<?> defaultValue) {
 
-		return LettuceResultBuilder.forResponse(resultHolder).mappedWith(converter)
+		return LettuceResultBuilder.forResponse(resultHolder).mappedWith((Converter) converter)
 				.convertPipelineAndTxResults(convertPipelineAndTxResults).defaultNullTo(defaultValue).build();
 	}
 
@@ -135,19 +138,22 @@ public class LettuceConnection extends AbstractRedisConnection {
 		return new LettuceStatusResult(resultHolder);
 	}
 
-	LettuceTxResult newLettuceTxResult(Object resultHolder) {
+	<T> LettuceTxResult<T, Object> newLettuceTxResult(T resultHolder) {
 		return newLettuceTxResult(resultHolder, (val) -> val);
 	}
 
-	<T> LettuceTxResult<T> newLettuceTxResult(Object resultHolder, Converter converter) {
+	@SuppressWarnings("unchecked")
+	<T> LettuceTxResult<T, Object> newLettuceTxResult(T resultHolder, Converter<T, ?> converter) {
 
-		return LettuceResultBuilder.forResponse(resultHolder).mappedWith(converter)
+		return LettuceResultBuilder.forResponse(resultHolder).mappedWith((Converter) converter)
 				.convertPipelineAndTxResults(convertPipelineAndTxResults).buildTxResult();
 	}
 
-	<T> LettuceTxResult<T> newLettuceTxResult(Object resultHolder, Converter converter, Supplier<?> defaultValue) {
+	@SuppressWarnings("unchecked")
+	<T> LettuceTxResult<T, Object> newLettuceTxResult(T resultHolder, Converter<T, ?> converter,
+			Supplier<?> defaultValue) {
 
-		return LettuceResultBuilder.forResponse(resultHolder).mappedWith(converter)
+		return LettuceResultBuilder.forResponse(resultHolder).mappedWith((Converter) converter)
 				.convertPipelineAndTxResults(convertPipelineAndTxResults).defaultNullTo(defaultValue).buildTxResult();
 	}
 
@@ -558,7 +564,7 @@ public class LettuceConnection extends AbstractRedisConnection {
 				return null;
 			}
 			if (isQueueing()) {
-				transaction(new LettuceTxResult(getConnection().echo(message)));
+				transaction(new LettuceTxResult<>(getConnection().echo(message)));
 				return null;
 			}
 			return getConnection().echo(message);
@@ -575,7 +581,7 @@ public class LettuceConnection extends AbstractRedisConnection {
 				return null;
 			}
 			if (isQueueing()) {
-				transaction(new LettuceTxResult(getConnection().ping()));
+				transaction(new LettuceTxResult<>(getConnection().ping()));
 				return null;
 			}
 			return getConnection().ping();
@@ -589,10 +595,10 @@ public class LettuceConnection extends AbstractRedisConnection {
 		isMulti = false;
 		try {
 			if (isPipelined()) {
-				pipeline(new LettuceStatusResult(((RedisAsyncCommands) getAsyncDedicatedConnection()).discard()));
+				pipeline(new LettuceStatusResult(getAsyncDedicatedRedisCommands().discard()));
 				return;
 			}
-			((RedisCommands) getDedicatedConnection()).discard();
+			getDedicatedRedisCommands().discard();
 		} catch (Exception ex) {
 			throw convertLettuceAccessException(ex);
 		} finally {
@@ -608,7 +614,7 @@ public class LettuceConnection extends AbstractRedisConnection {
 
 		try {
 			if (isPipelined()) {
-				RedisFuture<TransactionResult> exec = ((RedisAsyncCommands) getAsyncDedicatedConnection()).exec();
+				RedisFuture<TransactionResult> exec = getAsyncDedicatedRedisCommands().exec();
 
 				LettuceTransactionResultConverter resultConverter = new LettuceTransactionResultConverter(
 						new LinkedList<>(txResults), LettuceConverters.exceptionConverter());
@@ -618,7 +624,7 @@ public class LettuceConnection extends AbstractRedisConnection {
 				return null;
 			}
 
-			TransactionResult transactionResult = ((RedisCommands) getDedicatedConnection()).exec();
+			TransactionResult transactionResult = (getDedicatedRedisCommands()).exec();
 			List<Object> results = LettuceConverters.transactionResultUnwrapper().convert(transactionResult);
 			return convertPipelineAndTxResults
 					? new LettuceTransactionResultConverter(txResults, LettuceConverters.exceptionConverter()).convert(results)
@@ -641,7 +647,7 @@ public class LettuceConnection extends AbstractRedisConnection {
 				((RedisAsyncCommands) getAsyncDedicatedConnection()).multi();
 				return;
 			}
-			((RedisCommands) getDedicatedConnection()).multi();
+			(getDedicatedRedisCommands()).multi();
 		} catch (Exception ex) {
 			throw convertLettuceAccessException(ex);
 		}
@@ -678,10 +684,10 @@ public class LettuceConnection extends AbstractRedisConnection {
 				return;
 			}
 			if (isQueueing()) {
-				transaction(new LettuceTxStatusResult(((RedisAsyncCommands) getDedicatedConnection()).unwatch()));
+				transaction(new LettuceTxStatusResult(getDedicatedRedisCommands().unwatch()));
 				return;
 			}
-			((RedisCommands) getDedicatedConnection()).unwatch();
+			getDedicatedRedisCommands().unwatch();
 		} catch (Exception ex) {
 			throw convertLettuceAccessException(ex);
 		}
@@ -694,14 +700,14 @@ public class LettuceConnection extends AbstractRedisConnection {
 		}
 		try {
 			if (isPipelined()) {
-				pipeline(new LettuceStatusResult(((RedisAsyncCommands) getAsyncDedicatedConnection()).watch((Object[]) keys)));
+				pipeline(new LettuceStatusResult(getAsyncDedicatedRedisCommands().watch(keys)));
 				return;
 			}
 			if (isQueueing()) {
-				transaction(new LettuceTxStatusResult(((RedisAsyncCommands) getDedicatedConnection()).watch((Object[]) keys)));
+				transaction(new LettuceTxStatusResult(getDedicatedRedisCommands().watch(keys)));
 				return;
 			}
-			((RedisCommands) getDedicatedConnection()).watch((Object[]) keys);
+			getDedicatedRedisCommands().watch(keys);
 		} catch (Exception ex) {
 			throw convertLettuceAccessException(ex);
 		}
@@ -854,6 +860,11 @@ public class LettuceConnection extends AbstractRedisConnection {
 		return getDedicatedConnection();
 	}
 
+	@SuppressWarnings("unchecked")
+	private RedisAsyncCommands<byte[], byte[]> getAsyncDedicatedRedisCommands() {
+		return (RedisAsyncCommands) getAsyncDedicatedConnection();
+	}
+
 	protected RedisClusterAsyncCommands<byte[], byte[]> getAsyncDedicatedConnection() {
 
 		if (asyncDedicatedConn == null) {
@@ -874,6 +885,11 @@ public class LettuceConnection extends AbstractRedisConnection {
 
 		throw new IllegalStateException(
 				String.format("%s is not a supported connection type.", asyncDedicatedConn.getClass().getName()));
+	}
+
+	@SuppressWarnings("unchecked")
+	private RedisCommands<byte[], byte[]> getDedicatedRedisCommands() {
+		return (RedisCommands) getDedicatedConnection();
 	}
 
 	RedisClusterCommands<byte[], byte[]> getDedicatedConnection() {
@@ -898,6 +914,7 @@ public class LettuceConnection extends AbstractRedisConnection {
 				String.format("%s is not a supported connection type.", asyncDedicatedConn.getClass().getName()));
 	}
 
+	@SuppressWarnings("unchecked")
 	protected StatefulConnection<byte[], byte[]> doGetAsyncDedicatedConnection() {
 		return connectionProvider.getConnection(StatefulConnection.class);
 	}
